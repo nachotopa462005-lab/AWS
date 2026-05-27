@@ -118,3 +118,15 @@ La cuenta root tiene acceso total a todos los recursos de AWS.
 Por seguridad, no debe utilizarse para tareas diarias, ya que un error o robo de credenciales podría comprometer toda la cuenta.
 
 Lo recomendable es usar usuarios IAM con permisos específicos y dejar la cuenta root solo para tareas críticas de administración.
+
+# Amazon S3 Glacier
+
+Amazon S3 Glacier es un servicio de almacenamiento de bajo coste diseñado para backups y archivos que no necesitan acceso frecuente.
+
+Permite guardar datos a largo plazo pagando menos que en almacenamiento estándar.
+
+Tiene sentido usar Glacier para:
+- copias de seguridad,
+- archivos históricos,
+- recuperación ante desastres,
+- o datos que se consultan pocas veces.

@@ -130,3 +130,14 @@ Tiene sentido usar Glacier para:
 - archivos históricos,
 - recuperación ante desastres,
 - o datos que se consultan pocas veces.
+
+# Flujo de una Petición HTTP en el Stack ASIR
+
+El camino que recorre una petición desde que el usuario interactúa con la aplicación hasta que se consultan los datos se compone de los siguientes eslabones:
+
+1. **Navegador (Cliente):** El usuario introduce la URL o realiza una acción en la interfaz web (ej. consultar el inventario).
+2. **DNS:** El sistema de nombres de dominio traduce el dominio amigable (si lo hubiera) en la dirección IP pública correspondiente.
+3. **Elastic IP:** La petición llega a la IP estática y pública asociada a nuestra instancia EC2 en AWS, atravesando el Internet Gateway y los Security Groups correspondientes.
+4. **NGINX (Proxy Inverso):** Recibe la petición en el puerto 80/443 de la EC2. Evalúa las reglas de configuración y redirige el tráfico internamente hacia el contenedor del backend a través de la red interna de Docker. (Si el backend está caído, aquí es donde NGINX intercepta la desconexión y responde con un error 502).
+5. **FastAPI (Backend):** El framework procesa la solicitud HTTP entrante, ejecuta la lógica de negocio del endpoint solicitado y traduce la petición en una consulta SQL mediante la variable `DATABASE_URL`.
+6. **RDS PostgreSQL (Base de Datos):** La consulta viaja de forma segura por la subred privada `asir-private` (restringida por el grupo de seguridad `sg-rds`) hasta la instancia de base de datos administrada, la cual procesa la consulta y devuelve los registros solicitados al backend para hacer el camino de vuelta hacia el navegador del usuario.

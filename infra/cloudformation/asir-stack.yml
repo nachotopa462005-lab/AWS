@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ASIR AWS stack: VPC, public/private subnets, EC2, S3 backups and RDS PostgreSQL."
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair name.
+    Default: asir-keypair
+  AdminCidr:
+    Type: String
+    Description: Public administrator IP in CIDR format, for example 203.0.113.10/32.
+    AllowedPattern: "^(([0-9]{1,3}\\.){3}[0-9]{1,3})/([0-9]|[1-2][0-9]|3[0-2])$"
+  BackupBucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for backups.
+  DbName:
+    Type: String
+    Default: asirdb
+  DbUsername:
+    Type: String
+    NoEcho: true
+    MinLength: 3
+  DbPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+  LatestUbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+Resources:
+  AsirVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: asir-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: asir-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AsirVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AsirVpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: asir-public
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AsirVpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: asir-private-a
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AsirVpc
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: asir-private-b
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AsirVpc
+      Tags:
+        - Key: Name
+          Value: asir-public-rt
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  Ec2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: sg-ec2-web
+      GroupDescription: Allow SSH from admin IP and web traffic from Internet.
+      VpcId: !Ref AsirVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminCidr
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: sg-ec2-web
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: sg-rds
+      GroupDescription: Allow PostgreSQL only from EC2 web security group.
+      VpcId: !Ref AsirVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref Ec2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: sg-rds
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BackupBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: MoveBackupsToGlacierInstantRetrieval
+            Status: Enabled
+            Prefix: backups/
+            Transitions:
+              - StorageClass: GLACIER_IR
+                TransitionInDays: 30
+
+  Ec2S3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: rol-ec2-s3
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: asir-s3-backups-minimal
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${BackupBucket.Arn}/*"
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: asir-ec2-instance-profile
+      Roles:
+        - !Ref Ec2S3Role
+
+  AsirInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestUbuntuAmi
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref Ec2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: asir-ec2
+
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: asir-eip
+
+  ElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      InstanceId: !Ref AsirInstance
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for ASIR RDS.
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: asir-rds-subnet-group
+
+  RdsPostgres:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: asir-postgres
+      DBName: !Ref DbName
+      Engine: postgres
+      EngineVersion: "15"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Ref DbPassword
+      PubliclyAccessible: false
+      MultiAZ: false
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+
+Outputs:
+  VpcId:
+    Value: !Ref AsirVpc
+  PublicSubnetId:
+    Value: !Ref PublicSubnet
+  PrivateSubnetAId:
+    Value: !Ref PrivateSubnetA
+  Ec2InstanceId:
+    Value: !Ref AsirInstance
+  ElasticIp:
+    Value: !Ref ElasticIp
+  RdsEndpoint:
+    Value: !GetAtt RdsPostgres.Endpoint.Address
+  BackupBucket:
+    Value: !Ref BackupBucket

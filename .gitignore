@@ -1,0 +1,11 @@
+.env
+.env.*
+*.pem
+*.key
+*.tar.gz
+*.zip
+__pycache__/
+.pytest_cache/
+aws/
+awscliv2/
+awscliv2.zip

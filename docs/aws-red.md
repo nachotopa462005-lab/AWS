@@ -104,6 +104,56 @@ Sin ruta directa hacia Internet
 
 La subred privada permanece aislada por seguridad.
 
+---
+
+# Componentes desplegados
+
+La arquitectura desplegada queda formada por:
+
+- VPC `asir-vpc` con CIDR `10.0.0.0/16`.
+- Subred publica `asir-public` con CIDR `10.0.1.0/24`.
+- Subred privada `asir-private` con CIDR `10.0.2.0/24`.
+- Internet Gateway asociado a la VPC.
+- Tabla de rutas publica con salida `0.0.0.0/0` hacia el Internet Gateway.
+- Instancia EC2 Ubuntu 22.04 LTS `t2.micro` en la subred publica.
+- RDS PostgreSQL 15 en subred privada.
+- Elastic IP asociada a EC2.
+- Security Group `sg-ec2-web` para SSH, HTTP y HTTPS.
+- Security Group `sg-rds` para permitir PostgreSQL solo desde EC2.
+
+La documentacion de evidencias se encuentra en:
+
+```txt
+docs/pruebas-funcionamiento.md
+```
+
+---
+
+# Balanceador, HTTPS y dominio
+
+Para mejorar la arquitectura, se configuro un Application Load Balancer delante de la instancia EC2. El balanceador permite recibir trafico HTTP/HTTPS y reenviarlo hacia la instancia.
+
+Ventajas del Application Load Balancer:
+
+- Punto de entrada estable para la aplicacion.
+- Integracion con certificados SSL/TLS de AWS Certificate Manager.
+- Posibilidad de repartir trafico entre varias instancias si el proyecto crece.
+- Health checks para detectar instancias no disponibles.
+
+El certificado SSL/TLS se gestiona con AWS Certificate Manager. Route 53 puede apuntar el dominio personalizado al balanceador mediante un registro Alias.
+
+Flujo recomendado con ALB:
+
+```text
+Usuario -> Route 53 -> Application Load Balancer HTTPS -> EC2 -> NGINX -> FastAPI -> RDS
+```
+
+Si se accede directamente por Elastic IP, el flujo usado es:
+
+```text
+Usuario -> Elastic IP -> EC2 -> NGINX -> FastAPI -> RDS
+```
+
 # Documentación AWS: Direccionamiento IP en EC2
 
 En el despliegue de infraestructura en Amazon Web Services (AWS), es fundamental comprender cómo gestionar el direccionamiento IP de las instancias EC2 para garantizar la disponibilidad y continuidad de los servicios.

@@ -57,3 +57,76 @@ Se creó un usuario llamado:
 
 ```txt
 asir-readonly
+```
+
+Este usuario tiene asociada la politica administrada `ReadOnlyAccess`. Su objetivo es poder inspeccionar recursos sin modificar la infraestructura.
+
+Validacion realizada:
+
+```bash
+aws s3 ls --profile asir-readonly
+aws s3 mb s3://prueba-asir-readonly --profile asir-readonly
+```
+
+El primer comando permite comprobar que el usuario puede listar recursos. El segundo debe fallar con `AccessDenied`, porque un usuario de solo lectura no debe crear buckets ni modificar recursos.
+
+---
+
+# Usuarios, MFA y credenciales
+
+## Cuenta root
+
+La cuenta root no se usa para operaciones diarias. Solo debe utilizarse para tareas de gestion de la cuenta, facturacion, recuperacion de acceso o cambios criticos que no pueda hacer un usuario IAM.
+
+La cuenta root tiene MFA activado. Esto reduce el riesgo de que una contrasena comprometida permita tomar control total de la cuenta.
+
+## Usuario administrador
+
+Se creo el usuario IAM:
+
+```txt
+asir-admin
+```
+
+Este usuario tiene:
+
+- Politica `AdministratorAccess`.
+- MFA activado.
+- Credenciales programaticas para AWS CLI.
+
+La AWS CLI se configuro con este usuario y se valido con:
+
+```bash
+aws sts get-caller-identity
+```
+
+La respuesta esperada debe mostrar un ARN de este tipo:
+
+```txt
+arn:aws:iam::<id-cuenta>:user/asir-admin
+```
+
+Las Access Keys y Secret Access Keys no se guardan en Git ni en el repositorio.
+
+## Rol para EC2 y S3
+
+Para que la instancia EC2 pueda acceder a S3 no se guardan credenciales manuales dentro del servidor. En su lugar se usa el rol:
+
+```txt
+rol-ec2-s3
+```
+
+Este rol se asocia a la instancia EC2 y entrega credenciales temporales automaticamente mediante el metadata service de AWS.
+
+La politica minima aplicada permite solo:
+
+- `s3:PutObject`
+- `s3:GetObject`
+
+Y solo sobre:
+
+```txt
+arn:aws:s3:::asir-backups-<tu-nombre>/*
+```
+
+Esto respeta el principio de minimo privilegio: la EC2 puede subir y leer backups, pero no administrar todo S3 ni acceder a buckets ajenos.

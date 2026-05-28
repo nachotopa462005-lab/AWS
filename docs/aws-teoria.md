@@ -131,6 +131,26 @@ Tiene sentido usar Glacier para:
 - recuperación ante desastres,
 - o datos que se consultan pocas veces.
 
+---
+
+# Evidencias y entregables del proyecto
+
+La documentacion final del despliegue se reparte en estos archivos:
+
+- `docs/informe-final.md`: resumen del proyecto, arquitectura, servicios usados y conclusion.
+- `docs/pruebas-funcionamiento.md`: pruebas realizadas sobre IAM, EC2, Docker, NGINX, FastAPI, RDS y S3.
+- `docs/operaciones-aws-cli.md`: comandos y operaciones equivalentes realizadas con AWS CLI.
+- `infra/cloudformation/asir-stack.yml`: plantilla CloudFormation de referencia para recrear la infraestructura.
+- `scripts/s3_backup.sh`: script de backup diario hacia S3.
+
+Los secretos no se documentan ni se suben al repositorio. Esto incluye:
+
+- Access Keys.
+- Secret Access Keys.
+- Passwords de RDS.
+- Archivo `.env`.
+- Claves privadas `.pem`.
+
 # Flujo de una Petición HTTP en el Stack ASIR
 
 El camino que recorre una petición desde que el usuario interactúa con la aplicación hasta que se consultan los datos se compone de los siguientes eslabones:

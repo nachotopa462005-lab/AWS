@@ -20,10 +20,9 @@ El proyecto incluye documentacion teorica y tecnica sobre AWS, IAM, VPC, EC2, S3
 | --- | --- |
 | Local | `http://localhost` |
 | Swagger local | `http://localhost/docs` |
-| AWS EC2 | `http://<elastic-ip>` |
-| Swagger AWS | `http://<elastic-ip>/docs` |
+| AWS EC2 | `http://13.63.146.186` |
+| Swagger AWS | `http://13.63.146.186/docs` |
 
-> No se suben IPs reales, endpoints privados, claves, `.env`, passwords ni archivos `.pem`.
 
 ---
 
@@ -105,14 +104,14 @@ AWS/
 ## Ejecutar en local
 
 ```bash
-git clone <url-del-repositorio>
+git clone https://github.com/nachotopa462005-lab/AWS.git
 cd AWS
 ```
 
 Crear `.env`:
 
 ```env
-DATABASE_URL=postgresql://<usuario>:<password>@<host>:5432/<nombre-bd>
+DATABASE_URL=postgresql://postgres:<password>@asir-postgres:5432/appdb
 ```
 
 Levantar el stack:
@@ -139,7 +138,7 @@ En EC2:
 sudo apt-get update
 sudo apt-get upgrade -y
 curl -fsSL https://get.docker.com | sh
-git clone <url-del-repositorio>
+git clone https://github.com/nachotopa462005-lab/AWS.git
 cd AWS
 nano .env
 docker compose up --build -d
@@ -150,8 +149,8 @@ Validaciones:
 ```bash
 aws sts get-caller-identity
 docker compose ps
-curl -i http://<elastic-ip>/
-curl -i http://<elastic-ip>/docs
+curl -i http://13.63.146.186/
+curl -i http://13.63.146.186/docs
 docker compose logs -f backend
 ```
 
@@ -162,7 +161,7 @@ docker compose logs -f backend
 Script de backup:
 
 ```bash
-BACKUP_BUCKET=asir-backups-<tu-nombre> ./scripts/s3_backup.sh
+BACKUP_BUCKET=asir-backups-nachotopa ./scripts/s3_backup.sh
 ```
 
 Cron diario a las 2:00:
